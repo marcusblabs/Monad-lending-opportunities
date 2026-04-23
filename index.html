@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Vault Rate Check</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262b36;
+    --text: #e6e8ec;
+    --muted: #8b93a1;
+    --accent: #6ea8fe;
+    --danger: #e06c75;
+    --ok: #98c379;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { margin: 0 0 16px; font-size: 20px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  input[type=text] {
+    flex: 1;
+    min-width: 320px;
+    padding: 8px 10px;
+    background: #0b0d12;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  button {
+    padding: 8px 14px;
+    background: var(--accent);
+    color: #0b0d12;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  button.secondary { background: #2a3140; color: var(--text); }
+  button.danger { background: transparent; color: var(--danger); padding: 4px 8px; }
+  button:hover { opacity: 0.9; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; user-select: none; white-space: nowrap; }
+  th.nosort { cursor: default; }
+  th .arrow { display: inline-block; margin-left: 4px; opacity: 0.5; }
+  th.sorted { color: var(--text); }
+  th.sorted .arrow { opacity: 1; color: var(--accent); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #2a3140;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid transparent;
+  }
+  .chip.active { background: var(--accent); color: #0b0d12; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .muted { color: var(--muted); }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #2a3140;
+    font-size: 11px;
+    color: var(--text);
+  }
+  .apy-num { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .apy-parts { color: var(--muted); font-size: 11px; margin-top: 2px; line-height: 1.4; }
+  .apy-total { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; }
+  .err { color: var(--danger); font-size: 12px; }
+  .url-cell { font-size: 11px; color: var(--muted); word-break: break-all; max-width: 240px; }
+  .loading { opacity: 0.5; }
+  .status { font-size: 12px; color: var(--muted); margin-left: auto; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>Vault Rate Check</h1>
+
+<div class="panel">
+  <div class="row">
+    <input id="urlInput" type="text" placeholder="Paste vault URL (Morpho / Euler / Neverland)..." />
+    <button id="addBtn">Add</button>
+    <button id="refreshBtn" class="secondary">Refresh All</button>
+    <span id="status" class="status"></span>
+  </div>
+  <div class="row" id="filterRow" style="margin-top: 10px;">
+    <span class="muted" style="font-size: 12px;">Filter by token:</span>
+    <div id="tokenFilters" class="chips"></div>
+    <button id="clearFilters" class="secondary" style="padding:4px 10px;font-size:12px;">Clear</button>
+  </div>
+</div>
+
+<div class="panel" style="padding: 0; overflow-x: auto;">
+  <table id="table">
+    <thead>
+      <tr id="headerRow"></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+const STORAGE_KEY = "vault_urls_v3";
+const DEFAULT_URLS = [
+  "https://app.morpho.org/monad/vault/0x21649703fe63265058e9f22582552561Af4AfA3f/august-usdc",
+  "https://app.morpho.org/monad/vault/0xba8424EBBEd6C51bEa6d6D903B8815838E6a0322/steakhouse-prime-eth",
+  "https://app.morpho.org/monad/vault/0xc402B0cACC0C684427dAA40d964c8AE6fDbb96f7/hyperithm-cbbtc-apex",
+  "https://app.neverland.money/markets/monad/weth/analytics",
+  "https://app.euler.finance/earn/0xA981f053C118FE4dB0e1aEBA192AAD20Ec7F7801?network=143",
+  "https://app.euler.finance/earn/0x2C803c8C3C57b9D4A9abA011615561315c2b6aC1?network=143",
+];
+
+const CHAIN_NAMES = { 1: "Ethereum", 8453: "Base", 143: "Monad", 10143: "Monad Testnet" };
+const MONAD_RPC = "https://rpc.monad.xyz";
+
+function loadUrls() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [...DEFAULT_URLS];
+}
+function saveUrls(urls) { localStorage.setItem(STORAGE_KEY, JSON.stringify(urls)); }
+
+function parseUrl(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname;
+    if (host.includes("morpho.org")) {
+      const parts = u.pathname.split("/").filter(Boolean);
+      const chainSlug = parts[0];
+      const address = parts[2];
+      const chainId = chainSlug === "monad" ? 143 : chainSlug === "base" ? 8453 : chainSlug === "ethereum" ? 1 : null;
+      return { project: "Morpho", chainId, address, raw: url };
+    }
+    if (host.includes("euler.finance")) {
+      const parts = u.pathname.split("/").filter(Boolean);
+      const address = parts[1];
+      const chainId = parseInt(u.searchParams.get("network") || "1", 10);
+      return { project: "Euler", chainId, address, raw: url };
+    }
+    if (host.includes("neverland.money")) {
+      const parts = u.pathname.split("/").filter(Boolean);
+      const chainSlug = parts[1];
+      const asset = (parts[2] || "").toUpperCase();
+      const chainId = chainSlug === "monad" ? 143 : null;
+      return { project: "Neverland", chainId, address: null, asset, raw: url };
+    }
+  } catch (e) {}
+  return { project: "Unknown", chainId: null, address: null, raw: url };
+}
+
+function fmtUsd(n) {
+  if (n == null || isNaN(n)) return "—";
+  if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
+  return "$" + n.toFixed(0);
+}
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return "—";
+  return (n * 100).toFixed(2) + "%";
+}
+
+// ---------- Morpho ----------
+async function fetchMorpho(parsed) {
+  const query = `
+    query($address: String!, $chainId: Int!) {
+      vaultByAddress(address: $address, chainId: $chainId) {
+        name
+        symbol
+        asset { symbol }
+        liquidity { usd }
+        state {
+          totalAssetsUsd
+          netApy
+          netApyExcludingRewards
+          curators { name }
+          allRewards { supplyApr asset { symbol } }
+        }
+      }
+    }`;
+  const res = await fetch("https://blue-api.morpho.org/graphql", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables: { address: parsed.address, chainId: parsed.chainId } }),
+  });
+  const json = await res.json();
+  if (json.errors) throw new Error(json.errors[0].message);
+  const v = json.data?.vaultByAddress;
+  if (!v) throw new Error("Not found");
+  const s = v.state || {};
+  const rewards = (s.allRewards || []).map(r => ({ symbol: r.asset?.symbol, apr: r.supplyApr || 0 }));
+  const rewardsTotal = rewards.reduce((a, r) => a + r.apr, 0);
+  return {
+    chainId: parsed.chainId,
+    project: "Morpho",
+    token: v.asset?.symbol || "—",
+    vaultName: v.name || v.symbol,
+    curator: (s.curators || []).map(c => c.name).join(", ") || "—",
+    depositsUsd: s.totalAssetsUsd,
+    liquidityUsd: v.liquidity?.usd,
+    apyTotal: s.netApy,
+    apyBase: s.netApyExcludingRewards,
+    apyIncentives: rewardsTotal,
+    incentiveDetails: rewards,
+  };
+}
+
+// ---------- Neverland ----------
+let neverlandApyCache = { data: null, ts: 0 };
+let llamaLendBorrowCache = { data: null, ts: 0 };
+let llamaPoolsCache = { data: null, ts: 0 };
+async function fetchNeverlandApy() {
+  if (!neverlandApyCache.data || Date.now() - neverlandApyCache.ts > 30_000) {
+    const res = await fetch("https://app.neverland.money/api/pool-apy");
+    if (!res.ok) throw new Error("pool-apy " + res.status);
+    neverlandApyCache = { data: await res.json(), ts: Date.now() };
+  }
+  return neverlandApyCache.data;
+}
+async function fetchLlamaPools() {
+  if (!llamaPoolsCache.data || Date.now() - llamaPoolsCache.ts > 60_000) {
+    const res = await fetch("https://yields.llama.fi/pools");
+    if (!res.ok) throw new Error("llama pools " + res.status);
+    llamaPoolsCache = { data: (await res.json()).data, ts: Date.now() };
+  }
+  return llamaPoolsCache.data;
+}
+async function fetchLlamaLendBorrow() {
+  if (!llamaLendBorrowCache.data || Date.now() - llamaLendBorrowCache.ts > 60_000) {
+    const res = await fetch("https://yields.llama.fi/lendBorrow");
+    if (!res.ok) throw new Error("llama lendBorrow " + res.status);
+    llamaLendBorrowCache = { data: await res.json(), ts: Date.now() };
+  }
+  return llamaLendBorrowCache.data;
+}
+
+async function fetchNeverland(parsed) {
+  const apyData = await fetchNeverlandApy();
+  const reserve = Object.values(apyData.reserves || {}).find(r => (r.symbol || "").toUpperCase() === parsed.asset);
+  if (!reserve) throw new Error("Asset " + parsed.asset + " not found");
+  const supply = reserve.supply || {};
+  const base = parseFloat(supply.baseAPY) / 100;
+  const dust = parseFloat(supply.dustIncentiveAPR) / 100;
+  const ext = parseFloat(supply.externalAPY || "0") / 100;
+  const total = parseFloat(supply.totalAPY) / 100;
+  const incentiveDetails = [];
+  if (dust) incentiveDetails.push({ symbol: "DUST", apr: dust });
+  if (ext) incentiveDetails.push({ symbol: supply.externalProvider || "external", apr: ext });
+
+  let depositsUsd = null, liquidityUsd = null;
+  try {
+    const pools = await fetchLlamaPools();
+    const pool = pools.find(p => p.project === "neverland" && p.chain === "Monad" && (p.symbol || "").toUpperCase() === parsed.asset);
+    if (pool) {
+      const lb = await fetchLlamaLendBorrow();
+      const lbEntry = lb.find(x => x.pool === pool.pool);
+      if (lbEntry) {
+        depositsUsd = lbEntry.totalSupplyUsd;
+        liquidityUsd = Math.max(0, (lbEntry.totalSupplyUsd || 0) - (lbEntry.totalBorrowUsd || 0));
+      } else {
+        depositsUsd = pool.tvlUsd;
+      }
+    }
+  } catch (e) {}
+
+  return {
+    chainId: parsed.chainId,
+    project: "Neverland",
+    token: reserve.symbol || "—",
+    vaultName: reserve.symbol,
+    curator: "—",
+    depositsUsd,
+    liquidityUsd,
+    apyTotal: total,
+    apyBase: base,
+    apyIncentives: dust + ext,
+    incentiveDetails,
+  };
+}
+
+// ---------- Euler ----------
+async function rpcCall(to, data) {
+  const res = await fetch(MONAD_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
+  });
+  const j = await res.json();
+  if (j.error) throw new Error(j.error.message);
+  return j.result;
+}
+let rpcQueue = Promise.resolve();
+async function rpcBatch(calls) {
+  // Serialize all batches through a mutex so we never slam the public RPC.
+  const prev = rpcQueue;
+  let release;
+  rpcQueue = new Promise(r => { release = r; });
+  await prev;
+  try {
+    const result = await rpcBatchInner(calls);
+    await new Promise(r => setTimeout(r, 250));
+    return result;
+  } finally {
+    release();
+  }
+}
+async function rpcBatchInner(calls) {
+  if (!calls.length) return [];
+  const CHUNK = 15;
+  const out = new Array(calls.length).fill(null);
+  for (let start = 0; start < calls.length; start += CHUNK) {
+    const chunk = calls.slice(start, start + CHUNK);
+    // Retry per-chunk until all requested indices are filled.
+    let toDo = chunk.map((c, i) => ({ c, id: start + i }));
+    for (let attempt = 0; attempt < 5 && toDo.length; attempt++) {
+      const body = toDo.map(x => ({
+        jsonrpc: "2.0", id: x.id, method: "eth_call",
+        params: [{ to: x.c.to, data: x.c.data }, "latest"],
+      }));
+      let parsed = null;
+      try {
+        const res = await fetch(MONAD_RPC, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 429) {
+          await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+          continue;
+        }
+        parsed = await res.json();
+      } catch (e) {
+        await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+        continue;
+      }
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      const gotIds = new Set();
+      for (const item of arr) {
+        if (item && typeof item.id === "number") {
+          if (item.error) {
+            // execution reverted is terminal — don't retry
+            if (/revert/i.test(item.error.message || "")) {
+              out[item.id] = null;
+              gotIds.add(item.id);
+            }
+          } else {
+            out[item.id] = item.result;
+            gotIds.add(item.id);
+          }
+        }
+      }
+      toDo = toDo.filter(x => !gotIds.has(x.id));
+      if (toDo.length) await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
+  return out;
+}
+function decodeHexString(hex) {
+  if (!hex || hex === "0x") return null;
+  hex = hex.replace(/^0x/, "");
+  if (hex.length < 128) return null;
+  const len = parseInt(hex.slice(64, 128), 16);
+  const raw = hex.slice(128, 128 + len * 2);
+  return new TextDecoder().decode(new Uint8Array((raw.match(/.{2}/g) || []).map(b => parseInt(b, 16))));
+}
+function hexToBigInt(hex) {
+  if (!hex || hex === "0x") return 0n;
+  return BigInt(hex);
+}
+
+async function fetchMerklRewards(chainId, address) {
+  try {
+    const url = `https://api.merkl.xyz/v4/opportunities?chainId=${chainId}&identifier=${address}`;
+    const res = await fetch(url);
+    if (!res.ok) return { apr: 0, breakdown: [] };
+    const arr = await res.json();
+    if (!Array.isArray(arr) || !arr.length) return { apr: 0, breakdown: [] };
+    const totalApr = arr.reduce((a, o) => a + (o.apr || 0), 0) / 100;
+    const symbols = [...new Set(arr.flatMap(o =>
+      (o.rewardsRecord?.breakdowns || []).map(b => b.token?.symbol).filter(Boolean)
+    ))];
+    const breakdown = symbols.length
+      ? [{ symbol: symbols.join(" + "), apr: totalApr }]
+      : [{ symbol: "Merkl", apr: totalApr }];
+    return { apr: totalApr, breakdown };
+  } catch (e) { return { apr: 0, breakdown: [] }; }
+}
+
+async function fetchEuler(parsed) {
+  const addr = parsed.address;
+  const addrLow = addr.replace(/^0x/, "").toLowerCase();
+  const padAddr = "000000000000000000000000" + addrLow;
+
+  // Round 1: vault basics (name, asset, totalAssets, withdrawQueueLength)
+  const [nameHex, assetHex, totalAssetsHex, queueLenHex] = await rpcBatch([
+    { to: addr, data: "0x06fdde03" },
+    { to: addr, data: "0x38d52e0f" },
+    { to: addr, data: "0x01e1d114" },
+    { to: addr, data: "0x33f91ebb" },
+  ]);
+  const vaultName = decodeHexString(nameHex) || "Euler Vault";
+  const assetAddr = "0x" + (assetHex || "").slice(-40);
+  const totalAssetsRaw = hexToBigInt(totalAssetsHex);
+  const queueLen = Number(hexToBigInt(queueLenHex));
+
+  // Round 2: asset info + idle balance + each withdrawQueue(i) in one batch
+  const pad32 = n => n.toString(16).padStart(64, "0");
+  const queueCalls = Array.from({ length: queueLen }, (_, i) => ({
+    to: addr, data: "0x62518ddf" + pad32(i),
+  }));
+  const round2 = await rpcBatch([
+    { to: assetAddr, data: "0x313ce567" },
+    { to: assetAddr, data: "0x95d89b41" },
+    { to: assetAddr, data: "0x70a08231" + padAddr },
+    ...queueCalls,
+  ]);
+  const decimals = Number(hexToBigInt(round2[0]));
+  const assetSymbol = decodeHexString(round2[1]) || "";
+  const idleRaw = hexToBigInt(round2[2]);
+  const strategies = round2.slice(3)
+    .filter(Boolean)
+    .map(h => "0x" + h.slice(-40))
+    .filter(s => s !== "0x0000000000000000000000000000000000000000");
+
+  // Round 3: per-strategy reads — maxWithdraw, balanceOf(earn), cash, totalBorrows, interestRate
+  let strategiesMaxWithdraw = 0n;
+  const perStrategy = [];
+  if (strategies.length) {
+    const calls = [];
+    for (const s of strategies) {
+      calls.push({ to: s, data: "0xce96cb77" + padAddr }); // maxWithdraw(earn)
+      calls.push({ to: s, data: "0x70a08231" + padAddr }); // balanceOf(earn)
+      calls.push({ to: s, data: "0x961be391" });           // cash()
+      calls.push({ to: s, data: "0x47bd3718" });           // totalBorrows()
+      calls.push({ to: s, data: "0x7c3a00fd" });           // interestRate()
+    }
+    const res = await rpcBatch(calls);
+    for (let i = 0; i < strategies.length; i++) {
+      const base = i * 5;
+      const mw = hexToBigInt(res[base]);
+      const bal = hexToBigInt(res[base + 1]);
+      const cash = hexToBigInt(res[base + 2]);
+      const borrows = hexToBigInt(res[base + 3]);
+      const ir = hexToBigInt(res[base + 4]);
+      strategiesMaxWithdraw += mw;
+      perStrategy.push({ address: strategies[i], balanceShares: bal, cash, borrows, interestRate: ir });
+    }
+  }
+  const availableRaw = idleRaw + strategiesMaxWithdraw;
+
+  // Round 4: convertToAssets(balanceShares) per strategy to get each allocation in underlying
+  let totalAllocated = 0n;
+  if (perStrategy.length) {
+    const calls = perStrategy.map(s => ({
+      to: s.address,
+      data: "0x07a2d13a" + s.balanceShares.toString(16).padStart(64, "0"),
+    }));
+    const res = await rpcBatch(calls);
+    for (let i = 0; i < perStrategy.length; i++) {
+      perStrategy[i].allocation = hexToBigInt(res[i]);
+      totalAllocated += perStrategy[i].allocation;
+    }
+  }
+
+  // Compute weighted supply APY across strategies.
+  // Per-strategy supply APY: borrowAPY × utilization × (1 − interestFee); assume fee=10% (1000/1e4, Euler default).
+  const SECONDS_PER_YEAR = 31556952;
+  const INTEREST_FEE = 0.1;
+  let weightedApyNumerator = 0;
+  let weightedApyDenominator = 0;
+  for (const s of perStrategy) {
+    const stratTotal = s.cash + s.borrows;
+    if (stratTotal === 0n || s.allocation === 0n) continue;
+    const util = Number(s.borrows) / Number(stratTotal);
+    const ratePerSec = Number(s.interestRate) / 1e27;
+    if (ratePerSec <= 0) continue;
+    const borrowAPY = Math.expm1(Math.log1p(ratePerSec) * SECONDS_PER_YEAR);
+    const supplyAPY = borrowAPY * util * (1 - INTEREST_FEE);
+    const weight = Number(s.allocation);
+    weightedApyNumerator += supplyAPY * weight;
+    weightedApyDenominator += weight;
+  }
+  const chainBaseApy = weightedApyDenominator > 0 ? weightedApyNumerator / weightedApyDenominator : null;
+
+  const totalAssets = Number(totalAssetsRaw) / Math.pow(10, decimals);
+  const availableAssets = Number(availableRaw) / Math.pow(10, decimals);
+
+  // DefiLlama for USD TVL (base APY now computed on-chain)
+  let depositsUsd = null, liquidityUsd = null;
+  let baseApy = chainBaseApy;
+  try {
+    const pools = await fetchLlamaPools();
+    const pool = pools.find(p =>
+      p.chain === "Monad" &&
+      (p.project === "euler-v2" || p.project === "euler") &&
+      ((p.poolMeta || "").toLowerCase() === vaultName.toLowerCase() ||
+        ((p.underlyingTokens || []).some(t => t.toLowerCase() === assetAddr.toLowerCase()) && (p.symbol || "").toUpperCase() === assetSymbol.toUpperCase()))
+    );
+    if (pool) {
+      depositsUsd = pool.tvlUsd;
+      if (baseApy == null) baseApy = (pool.apyBase || 0) / 100;
+      if (totalAssets > 0 && availableAssets > 0) {
+        const pricePerUnit = pool.tvlUsd / totalAssets;
+        liquidityUsd = availableAssets * pricePerUnit;
+      }
+    }
+  } catch (e) {}
+
+  // 4) Merkl for reward APY breakdown
+  const rewards = await fetchMerklRewards(parsed.chainId, addr);
+
+  const apyTotal = (baseApy || 0) + rewards.apr;
+
+  return {
+    chainId: parsed.chainId,
+    project: "Euler",
+    token: assetSymbol || "—",
+    vaultName,
+    curator: "—",
+    depositsUsd,
+    liquidityUsd,
+    depositsFallback: depositsUsd == null ? { amount: totalAssets, symbol: assetSymbol } : null,
+    liquidityFallback: (liquidityUsd == null && availableAssets > 0) ? { amount: availableAssets, symbol: assetSymbol } : null,
+    apyTotal,
+    apyBase: baseApy,
+    apyIncentives: rewards.apr,
+    incentiveDetails: rewards.breakdown,
+  };
+}
+
+async function fetchRow(parsed) {
+  if (parsed.project === "Morpho") return fetchMorpho(parsed);
+  if (parsed.project === "Euler") return fetchEuler(parsed);
+  if (parsed.project === "Neverland") return fetchNeverland(parsed);
+  throw new Error("Unknown protocol");
+}
+
+// ---------- Rendering ----------
+function renderIncentiveDetails(list, total) {
+  if (!list || !list.length) return "";
+  const nonZero = list.filter(r => r.apr > 0);
+  if (!nonZero.length) return "";
+  if (nonZero.length === 1 && Math.abs(nonZero[0].apr - (total || 0)) < 1e-9) {
+    return nonZero[0].symbol;
+  }
+  return nonZero.map(r => `${r.symbol} ${fmtPct(r.apr)}`).join(" + ");
+}
+
+const COLUMNS = [
+  { key: "chain", label: "Chain", sortable: true, type: "string", get: r => r.chain },
+  { key: "project", label: "Project", sortable: true, type: "string", get: r => r.project },
+  { key: "token", label: "Token", sortable: true, type: "string", get: r => r.token },
+  { key: "vault", label: "Vault", sortable: true, type: "string", get: r => r.vaultName },
+  { key: "curator", label: "Curator", sortable: true, type: "string", get: r => r.curator },
+  { key: "deposits", label: "Deposits", sortable: true, type: "number", get: r => r.depositsUsd },
+  { key: "liquidity", label: "Liquidity", sortable: true, type: "number", get: r => r.liquidityUsd },
+  { key: "total", label: "Total APY", sortable: true, type: "number", get: r => r.apyTotal },
+  { key: "base", label: "Base APY", sortable: true, type: "number", get: r => r.apyBase },
+  { key: "incentives", label: "Incentives APY", sortable: true, type: "number", get: r => r.apyIncentives },
+  { key: "url", label: "URL", sortable: false },
+  { key: "actions", label: "", sortable: false },
+];
+
+function buildRows() {
+  return state.urls.map(url => {
+    const parsed = parseUrl(url);
+    const entry = state.data[url] || {};
+    const d = entry.data;
+    return {
+      url,
+      parsed,
+      entry,
+      chain: CHAIN_NAMES[parsed.chainId] || String(parsed.chainId || ""),
+      project: parsed.project,
+      token: d?.token || parsed.asset || "",
+      vaultName: d?.vaultName || "",
+      curator: d?.curator || "",
+      depositsUsd: d?.depositsUsd ?? null,
+      liquidityUsd: d?.liquidityUsd ?? null,
+      apyTotal: d?.apyTotal ?? null,
+      apyBase: d?.apyBase ?? null,
+      apyIncentives: d?.apyIncentives ?? null,
+      incentiveDetails: d?.incentiveDetails || [],
+      depositsFallback: d?.depositsFallback || null,
+      liquidityFallback: d?.liquidityFallback || null,
+    };
+  });
+}
+
+function renderHeader() {
+  const tr = document.getElementById("headerRow");
+  tr.innerHTML = "";
+  COLUMNS.forEach(col => {
+    const th = document.createElement("th");
+    th.textContent = col.label;
+    if (!col.sortable) {
+      th.classList.add("nosort");
+    } else {
+      if (state.sort.key === col.key) {
+        th.classList.add("sorted");
+        const arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.textContent = state.sort.dir === "asc" ? "▲" : "▼";
+        th.appendChild(arrow);
+      }
+      th.addEventListener("click", () => {
+        if (state.sort.key === col.key) {
+          state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+        } else {
+          state.sort.key = col.key;
+          state.sort.dir = col.type === "number" ? "desc" : "asc";
+        }
+        renderAll();
+      });
+    }
+    tr.appendChild(th);
+  });
+}
+
+function renderFilterChips(rows) {
+  const box = document.getElementById("tokenFilters");
+  const tokens = [...new Set(rows.map(r => r.token).filter(Boolean))].sort();
+  box.innerHTML = "";
+  tokens.forEach(tok => {
+    const chip = document.createElement("span");
+    chip.className = "chip" + (state.tokenFilter.has(tok) ? " active" : "");
+    chip.textContent = tok;
+    chip.addEventListener("click", () => {
+      if (state.tokenFilter.has(tok)) state.tokenFilter.delete(tok);
+      else state.tokenFilter.add(tok);
+      renderAll();
+    });
+    box.appendChild(chip);
+  });
+}
+
+function sortRows(rows) {
+  if (!state.sort.key) return rows;
+  const col = COLUMNS.find(c => c.key === state.sort.key);
+  if (!col || !col.sortable) return rows;
+  const dirMul = state.sort.dir === "asc" ? 1 : -1;
+  const arr = rows.slice();
+  arr.sort((a, b) => {
+    const va = col.get(a);
+    const vb = col.get(b);
+    // null / undefined go to bottom regardless of direction
+    const aNull = va == null || va === "";
+    const bNull = vb == null || vb === "";
+    if (aNull && bNull) return 0;
+    if (aNull) return 1;
+    if (bNull) return -1;
+    if (col.type === "number") return (va - vb) * dirMul;
+    return String(va).localeCompare(String(vb)) * dirMul;
+  });
+  return arr;
+}
+
+function renderBody(rows) {
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    if (r.entry.loading) tr.classList.add("loading");
+    const cells = [];
+    cells.push(`<td>${r.chain || "—"}</td>`);
+    cells.push(`<td><span class="pill">${r.project}</span></td>`);
+
+    if (r.entry.error) {
+      const label = r.parsed.address ? r.parsed.address.slice(0, 10) + "…" : (r.parsed.asset || "—");
+      cells.push(`<td class="muted">${r.token || "—"}</td>`);
+      cells.push(`<td>${label}</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="err" colspan="3">${r.entry.error}</td>`);
+    } else if (r.entry.data) {
+      cells.push(`<td>${r.token || "—"}</td>`);
+      cells.push(`<td>${r.vaultName || "—"}</td>`);
+      cells.push(`<td>${r.curator || "—"}</td>`);
+      const depCell = r.depositsUsd != null
+        ? fmtUsd(r.depositsUsd)
+        : r.depositsFallback ? `${r.depositsFallback.amount.toLocaleString(undefined,{maximumFractionDigits:2})} ${r.depositsFallback.symbol}` : "—";
+      const liqCell = r.liquidityUsd != null
+        ? fmtUsd(r.liquidityUsd)
+        : r.liquidityFallback ? `${r.liquidityFallback.amount.toLocaleString(undefined,{maximumFractionDigits:2})} ${r.liquidityFallback.symbol}` : "—";
+      cells.push(`<td>${depCell}</td>`);
+      cells.push(`<td>${liqCell}</td>`);
+      cells.push(`<td class="apy-total">${fmtPct(r.apyTotal)}</td>`);
+      cells.push(`<td class="apy-num">${fmtPct(r.apyBase)}</td>`);
+      const incDetails = renderIncentiveDetails(r.incentiveDetails, r.apyIncentives);
+      cells.push(`<td><div class="apy-num">${fmtPct(r.apyIncentives)}</div>${incDetails ? `<div class="apy-parts">${incDetails}</div>` : ""}</td>`);
+    } else {
+      cells.push(`<td class="muted">${r.token || "—"}</td>`);
+      cells.push(`<td class="muted">loading…</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="muted">—</td>`);
+      cells.push(`<td class="muted">—</td>`);
+    }
+
+    cells.push(`<td class="url-cell"><a href="${r.url}" target="_blank" rel="noopener">open</a></td>`);
+    cells.push(`<td><button class="danger" data-url="${encodeURIComponent(r.url)}">remove</button></td>`);
+    tr.innerHTML = cells.join("");
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll("button.danger").forEach(btn => {
+    btn.addEventListener("click", () => removeUrl(decodeURIComponent(btn.dataset.url)));
+  });
+}
+
+function renderAll() {
+  const rows = buildRows();
+  renderFilterChips(rows);
+  const filtered = state.tokenFilter.size
+    ? rows.filter(r => state.tokenFilter.has(r.token))
+    : rows;
+  const sorted = sortRows(filtered);
+  renderHeader();
+  renderBody(sorted);
+}
+
+// Back-compat wrapper so the rest of the app can keep calling render()
+function render() { renderAll(); }
+
+let state = {
+  urls: loadUrls(),
+  data: {},
+  sort: { key: null, dir: "asc" },
+  tokenFilter: new Set(),
+};
+
+async function refreshAll() {
+  const status = document.getElementById("status");
+  status.textContent = "Refreshing…";
+  state.data = {};
+  state.urls.forEach(u => { state.data[u] = { loading: true }; });
+  render(state.urls, state.data);
+
+  await Promise.all(state.urls.map(async (url) => {
+    const parsed = parseUrl(url);
+    try {
+      state.data[url] = { data: await fetchRow(parsed) };
+    } catch (e) {
+      state.data[url] = { error: e.message || String(e) };
+    }
+  }));
+  render(state.urls, state.data);
+  status.textContent = "Updated " + new Date().toLocaleTimeString();
+}
+
+async function refreshOne(url) {
+  state.data[url] = { loading: true };
+  render(state.urls, state.data);
+  try {
+    state.data[url] = { data: await fetchRow(parseUrl(url)) };
+  } catch (e) {
+    state.data[url] = { error: e.message || String(e) };
+  }
+  render(state.urls, state.data);
+}
+
+function addUrl(url) {
+  url = url.trim();
+  if (!url || state.urls.includes(url)) return;
+  state.urls.push(url);
+  saveUrls(state.urls);
+  render(state.urls, state.data);
+  refreshOne(url);
+}
+function removeUrl(url) {
+  state.urls = state.urls.filter(u => u !== url);
+  delete state.data[url];
+  saveUrls(state.urls);
+  render(state.urls, state.data);
+}
+
+document.getElementById("addBtn").addEventListener("click", () => {
+  const input = document.getElementById("urlInput");
+  addUrl(input.value);
+  input.value = "";
+});
+document.getElementById("urlInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { addUrl(e.target.value); e.target.value = ""; }
+});
+document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+document.getElementById("clearFilters").addEventListener("click", () => {
+  state.tokenFilter.clear();
+  renderAll();
+});
+
+renderAll();
+refreshAll();
+</script>
+</body>
+</html>
