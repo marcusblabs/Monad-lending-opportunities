@@ -1,127 +1,509 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
-<title>Vault Rate Check</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monad Vaults / rate check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
-  :root {
-    --bg: #0f1115;
-    --panel: #171a21;
-    --border: #262b36;
-    --text: #e6e8ec;
-    --muted: #8b93a1;
-    --accent: #6ea8fe;
-    --danger: #e06c75;
-    --ok: #98c379;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    padding: 24px;
-  }
-  h1 { margin: 0 0 16px; font-size: 20px; }
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 16px;
-  }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  input[type=text] {
-    flex: 1;
-    min-width: 320px;
-    padding: 8px 10px;
-    background: #0b0d12;
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 6px;
-    font-size: 13px;
-  }
-  button {
-    padding: 8px 14px;
-    background: var(--accent);
-    color: #0b0d12;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 13px;
-  }
-  button.secondary { background: #2a3140; color: var(--text); }
-  button.danger { background: transparent; color: var(--danger); padding: 4px 8px; }
-  button:hover { opacity: 0.9; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; user-select: none; white-space: nowrap; }
-  th.nosort { cursor: default; }
-  th .arrow { display: inline-block; margin-left: 4px; opacity: 0.5; }
-  th.sorted { color: var(--text); }
-  th.sorted .arrow { opacity: 1; color: var(--accent); }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip {
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: #2a3140;
-    font-size: 11px;
-    cursor: pointer;
-    user-select: none;
-    border: 1px solid transparent;
-  }
-  .chip.active { background: var(--accent); color: #0b0d12; font-weight: 600; }
-  tr:last-child td { border-bottom: none; }
-  .muted { color: var(--muted); }
-  .pill {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: #2a3140;
-    font-size: 11px;
-    color: var(--text);
-  }
-  .apy-num { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .apy-parts { color: var(--muted); font-size: 11px; margin-top: 2px; line-height: 1.4; }
-  .apy-total { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; }
-  .err { color: var(--danger); font-size: 12px; }
-  .url-cell { font-size: 11px; color: var(--muted); word-break: break-all; max-width: 240px; }
-  .loading { opacity: 0.5; }
-  .status { font-size: 12px; color: var(--muted); margin-left: auto; }
-  a { color: var(--accent); }
+/* ---------- Tokens ---------- */
+:root {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --accent: oklch(0.68 0.18 295);
+  --accent-hover: oklch(0.74 0.18 295);
+  --accent-soft: oklch(0.68 0.18 295 / 0.14);
+  --accent-fg: white;
+
+  --bg: #0E0E11;
+  --surface: #16161B;
+  --surface-2: #1C1C22;
+  --surface-3: #24242C;
+  --border: oklch(0.25 0.01 280);
+  --border-strong: oklch(0.32 0.01 280);
+  --text: oklch(0.96 0.005 280);
+  --text-2: oklch(0.78 0.01 280);
+  --muted: oklch(0.58 0.01 280);
+  --good: oklch(0.72 0.16 150);
+  --warn: oklch(0.78 0.16 70);
+  --bad: oklch(0.68 0.20 25);
+  --shadow: 0 1px 0 rgba(0,0,0,0.3), 0 6px 24px rgba(0,0,0,0.25);
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --row-h: 56px;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body { min-height: 100vh; }
+button { font-family: inherit; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+input { font-family: inherit; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+
+/* ---------- Layout ---------- */
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 32px 80px;
+}
+
+/* ---------- Header ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; letter-spacing: -0.01em;
+}
+.brand-mark {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), oklch(0.45 0.20 305));
+  display: grid; place-items: center;
+  color: var(--accent-fg);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+}
+.brand-title { font-size: 15px; }
+.brand-sub { color: var(--muted); font-size: 12px; font-weight: 400; }
+
+.header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+.btn {
+  height: 34px;
+  padding: 0 14px;
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--border-strong); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary {
+  background: var(--accent); color: var(--accent-fg);
+  border-color: var(--accent);
+}
+.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* ---------- Stats ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.stat {
+  background: var(--surface);
+  padding: 16px 20px;
+}
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.stat-meta { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+
+/* ---------- Toolbar ---------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search-box {
+  flex: 1;
+  min-width: 280px;
+  height: 38px;
+  display: flex; align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0 12px;
+  gap: 8px;
+  transition: border-color 0.15s;
+}
+.search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search-box svg { color: var(--muted); flex-shrink: 0; }
+.search-box input {
+  flex: 1;
+  border: none; outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  height: 100%;
+}
+.search-box input::placeholder { color: var(--muted); }
+
+.chip-row {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.chip {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: all 0.12s;
+}
+.chip:hover { border-color: var(--border-strong); color: var(--text); }
+.chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.chip-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.chip.active .chip-count { color: var(--accent); }
+.chip-clear { color: var(--muted); }
+
+/* ---------- Atoms ---------- */
+.proj-mark {
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  color: white;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.proj-mark img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+.token-mark {
+  display: inline-grid; place-items: center;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: white;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.token-mark img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.apy-display { display: flex; flex-direction: column; align-items: flex-end; }
+.apy-total {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.apy-md .apy-total { font-size: 17px; }
+.apy-lg .apy-total { font-size: 28px; letter-spacing: -0.03em; }
+.apy-parts {
+  display: flex; gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.apy-base { color: var(--text-2); }
+.apy-inc { color: var(--accent); }
+.apy-plus { color: var(--muted); }
+
+.util-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.util-pct {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: right;
+}
+.util-bar {
+  display: inline-block;
+  width: 64px; height: 4px;
+  background: var(--surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.util-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+/* ---------- Table ---------- */
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.vault-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.vault-table thead th {
+  position: sticky; top: 0;
+  background: var(--surface);
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.vault-table thead th.nosort { cursor: default; }
+.vault-table thead th.right { text-align: right; }
+.vault-table thead th.sorted { color: var(--text); }
+.vault-table thead th .arrow {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9px;
+  color: var(--accent);
+}
+.vault-table tbody td {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.vault-table tbody tr:last-child td { border-bottom: none; }
+.vault-table tbody tr { transition: background 0.12s; }
+.vault-table tbody tr:hover { background: var(--surface-2); }
+
+.cell-vault { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cell-vault-name {
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 280px;
+}
+.cell-vault-curator { font-size: 11px; color: var(--muted); }
+.cell-token {
+  display: flex; align-items: center; gap: 10px;
+}
+.cell-token-name {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+.cell-project {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.cell-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.cell-num.dim { color: var(--text-2); }
+.cell-action {
+  display: flex; gap: 4px; justify-content: flex-end;
+}
+.row-action {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+  transition: all 0.12s;
+  cursor: pointer;
+}
+.vault-table tbody tr:hover .row-action { opacity: 1; }
+.row-action:hover { background: var(--surface-3); color: var(--text); }
+.row-action.danger:hover { background: oklch(0.68 0.20 25 / 0.16); color: var(--bad); }
+
+.row-error td { color: var(--bad); font-size: 12px; }
+
+/* ---------- Status bar ---------- */
+.status-bar {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: var(--good);
+  box-shadow: 0 0 0 3px oklch(0.72 0.16 150 / 0.15);
+}
+.status-dot.refreshing { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.status-spacer { margin-left: auto; }
+
+/* ---------- Add vault modal ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: oklch(0 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+  display: grid; place-items: center;
+  z-index: 50;
+  animation: fade 0.15s ease;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 460px;
+  max-width: 92vw;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+}
+.modal h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.modal p { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.modal input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+.modal input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* ---------- Empty ---------- */
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+.empty h4 { margin: 0 0 6px; color: var(--text); font-weight: 500; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 880px) {
+  .app { padding: 20px 16px 60px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .vault-table thead th.hide-md, .vault-table tbody td.hide-md { display: none; }
+}
+@media (max-width: 560px) {
+  .stats { grid-template-columns: 1fr; }
+  .vault-table thead th.hide-sm, .vault-table tbody td.hide-sm { display: none; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+.row-loading { opacity: 0.45; }
 </style>
 </head>
 <body>
-<h1>Vault Rate Check</h1>
 
-<div class="panel">
-  <div class="row">
-    <input id="urlInput" type="text" placeholder="Paste vault URL (Morpho / Euler / Neverland)..." />
-    <button id="addBtn">Add</button>
-    <button id="refreshBtn" class="secondary">Refresh All</button>
-    <span id="status" class="status"></span>
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div>
+        <span class="brand-title">Monad Vaults</span>
+        <span class="brand-sub">/ rate check</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="refreshBtn">
+        <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+        <span id="refreshLabel">Refresh</span>
+      </button>
+      <button class="btn primary" id="addBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        Add vault
+      </button>
+    </div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="searchInput" type="text" placeholder="Search vault, curator, or paste a vault URL…" />
+    </div>
   </div>
-  <div class="row" id="filterRow" style="margin-top: 10px;">
-    <span class="muted" style="font-size: 12px;">Filter by token:</span>
-    <div id="tokenFilters" class="chips"></div>
-    <button id="clearFilters" class="secondary" style="padding:4px 10px;font-size:12px;">Clear</button>
+
+  <div class="chip-row" id="chipRow"></div>
+
+  <div id="tableHost"></div>
+
+  <div class="status-bar">
+    <span id="statusDot" class="status-dot"></span>
+    <span id="statusText">Loading…</span>
+    <span class="status-spacer"></span>
+    <span id="statusCount"></span>
   </div>
 </div>
 
-<div class="panel" style="padding: 0; overflow-x: auto;">
-  <table id="table">
-    <thead>
-      <tr id="headerRow"></tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
-</div>
+<div id="modalRoot"></div>
 
 <script>
 const STORAGE_KEY = "vault_urls_v4";
@@ -144,6 +526,24 @@ const DEFAULT_URLS = [
 
 const CHAIN_NAMES = { 1: "Ethereum", 8453: "Base", 143: "Monad", 10143: "Monad Testnet" };
 const MONAD_RPC = "https://rpc.monad.xyz";
+
+const PROJECT_LOGOS = {
+  Morpho: "logos/morpho.png",
+  Euler: "logos/euler.png",
+  Neverland: "logos/neverland.png",
+};
+const TOKEN_LOGOS = {
+  USDC:  "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
+  USDT:  "https://assets.coingecko.com/coins/images/325/small/Tether.png",
+  USDT0: "https://assets.coingecko.com/coins/images/53705/standard/usdt0.jpg",
+  AUSD:  "logos/ausd.png",
+  WETH:  "https://assets.coingecko.com/coins/images/2518/small/weth.png",
+  ETH:   "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
+  WBTC:  "https://assets.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png",
+  cbBTC: "https://assets.coingecko.com/coins/images/40143/small/cbbtc.webp",
+  WMON:  "logos/wmon.png",
+  MON:   "logos/wmon.png",
+};
 
 function loadUrls() {
   try {
@@ -193,20 +593,65 @@ function fmtPct(n) {
   if (n == null || isNaN(n)) return "—";
   return (n * 100).toFixed(2) + "%";
 }
+function fmtPctShort(n) {
+  if (n == null || isNaN(n)) return "—";
+  return (n * 100).toFixed(1) + "%";
+}
+function escHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" })[c]);
+}
 
-// ---------- Morpho ----------
+// ----------------- Atom builders -----------------
+function tokenMarkHtml(token, size = 28) {
+  const sz = `width:${size}px;height:${size}px;`;
+  const src = TOKEN_LOGOS[token] || TOKEN_LOGOS[(token || "").toUpperCase()];
+  if (src) {
+    return `<span class="token-mark" style="${sz}"><img src="${escHtml(src)}" alt="${escHtml(token)}" /></span>`;
+  }
+  // Fallback: monogram with hashed color
+  const palette = ["oklch(0.62 0.19 295)","oklch(0.65 0.14 230)","oklch(0.68 0.13 160)","oklch(0.70 0.14 80)","oklch(0.65 0.16 25)","oklch(0.60 0.13 320)"];
+  let h = 0;
+  for (let i = 0; i < (token || "").length; i++) h = (h * 31 + token.charCodeAt(i)) >>> 0;
+  const bg = palette[h % palette.length];
+  const initials = (token || "?").slice(0, (token || "").startsWith("cb") ? 4 : 3).toUpperCase();
+  const fontSize = size <= 24 ? 9 : size <= 32 ? 10 : 11;
+  return `<span class="token-mark" style="${sz}background:${bg};font-size:${fontSize}px;color:white;border:none;">${escHtml(initials)}</span>`;
+}
+function projectMarkHtml(project, size = 18) {
+  const src = PROJECT_LOGOS[project];
+  const sz = `width:${size}px;height:${size}px;`;
+  if (src) return `<span class="proj-mark" style="${sz}"><img src="${escHtml(src)}" alt="${escHtml(project)}" /></span>`;
+  return `<span class="proj-mark" style="${sz}background:var(--surface-2);color:var(--text-2);">?</span>`;
+}
+function apyDisplayHtml(total, base, incentives, size = "md") {
+  return `<div class="apy-display apy-${size}">
+    <div class="apy-total">${fmtPct(total)}</div>
+    <div class="apy-parts">
+      <span class="apy-base">${fmtPctShort(base)}</span>
+      <span class="apy-plus">+</span>
+      <span class="apy-inc">${fmtPctShort(incentives)}</span>
+    </div>
+  </div>`;
+}
+function utilBarHtml(deposits, liquidity) {
+  if (!deposits || liquidity == null) return `<span class="muted">—</span>`;
+  const util = Math.max(0, Math.min(1, 1 - liquidity / deposits));
+  const pct = (util * 100).toFixed(0) + "%";
+  return `<span class="util-cell" title="Utilization ${pct}">
+    <span class="util-bar"><span class="util-fill" style="width:${pct}"></span></span>
+    <span class="util-pct">${pct}</span>
+  </span>`;
+}
+
+// ----------------- Morpho -----------------
 async function fetchMorpho(parsed) {
   const query = `
     query($address: String!, $chainId: Int!) {
       vaultByAddress(address: $address, chainId: $chainId) {
-        name
-        symbol
-        asset { symbol }
+        name symbol asset { symbol }
         liquidity { usd }
         state {
-          totalAssetsUsd
-          netApy
-          netApyExcludingRewards
+          totalAssetsUsd netApy netApyExcludingRewards
           curators { name }
           allRewards { supplyApr asset { symbol } }
         }
@@ -239,7 +684,7 @@ async function fetchMorpho(parsed) {
   };
 }
 
-// ---------- Neverland ----------
+// ----------------- Neverland -----------------
 let neverlandApyCache = { data: null, ts: 0 };
 let llamaLendBorrowCache = { data: null, ts: 0 };
 let llamaPoolsCache = { data: null, ts: 0 };
@@ -267,7 +712,6 @@ async function fetchLlamaLendBorrow() {
   }
   return llamaLendBorrowCache.data;
 }
-
 async function fetchNeverland(parsed) {
   const apyData = await fetchNeverlandApy();
   const reserve = Object.values(apyData.reserves || {}).find(r => (r.symbol || "").toUpperCase() === parsed.asset);
@@ -312,20 +756,9 @@ async function fetchNeverland(parsed) {
   };
 }
 
-// ---------- Euler ----------
-async function rpcCall(to, data) {
-  const res = await fetch(MONAD_RPC, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
-  });
-  const j = await res.json();
-  if (j.error) throw new Error(j.error.message);
-  return j.result;
-}
+// ----------------- Euler (RPC + DefiLlama + Merkl) -----------------
 let rpcQueue = Promise.resolve();
 async function rpcBatch(calls) {
-  // Serialize all batches through a mutex so we never slam the public RPC.
   const prev = rpcQueue;
   let release;
   rpcQueue = new Promise(r => { release = r; });
@@ -344,7 +777,6 @@ async function rpcBatchInner(calls) {
   const out = new Array(calls.length).fill(null);
   for (let start = 0; start < calls.length; start += CHUNK) {
     const chunk = calls.slice(start, start + CHUNK);
-    // Retry per-chunk until all requested indices are filled.
     let toDo = chunk.map((c, i) => ({ c, id: start + i }));
     for (let attempt = 0; attempt < 5 && toDo.length; attempt++) {
       const body = toDo.map(x => ({
@@ -372,7 +804,6 @@ async function rpcBatchInner(calls) {
       for (const item of arr) {
         if (item && typeof item.id === "number") {
           if (item.error) {
-            // execution reverted is terminal — don't retry
             if (/revert/i.test(item.error.message || "")) {
               out[item.id] = null;
               gotIds.add(item.id);
@@ -401,7 +832,6 @@ function hexToBigInt(hex) {
   if (!hex || hex === "0x") return 0n;
   return BigInt(hex);
 }
-
 async function fetchMerklRewards(chainId, address) {
   try {
     const url = `https://api.merkl.xyz/v4/opportunities?chainId=${chainId}&identifier=${address}`;
@@ -419,13 +849,9 @@ async function fetchMerklRewards(chainId, address) {
     return { apr: totalApr, breakdown };
   } catch (e) { return { apr: 0, breakdown: [] }; }
 }
-
 async function fetchEuler(parsed) {
   const addr = parsed.address;
-  const addrLow = addr.replace(/^0x/, "").toLowerCase();
-  const padAddr = "000000000000000000000000" + addrLow;
-
-  // Round 1: vault basics (name, asset, totalAssets, withdrawQueueLength)
+  const padAddr = "000000000000000000000000" + addr.replace(/^0x/, "").toLowerCase();
   const [nameHex, assetHex, totalAssetsHex, queueLenHex] = await rpcBatch([
     { to: addr, data: "0x06fdde03" },
     { to: addr, data: "0x38d52e0f" },
@@ -437,11 +863,8 @@ async function fetchEuler(parsed) {
   const totalAssetsRaw = hexToBigInt(totalAssetsHex);
   const queueLen = Number(hexToBigInt(queueLenHex));
 
-  // Round 2: asset info + idle balance + each withdrawQueue(i) in one batch
   const pad32 = n => n.toString(16).padStart(64, "0");
-  const queueCalls = Array.from({ length: queueLen }, (_, i) => ({
-    to: addr, data: "0x62518ddf" + pad32(i),
-  }));
+  const queueCalls = Array.from({ length: queueLen }, (_, i) => ({ to: addr, data: "0x62518ddf" + pad32(i) }));
   const round2 = await rpcBatch([
     { to: assetAddr, data: "0x313ce567" },
     { to: assetAddr, data: "0x95d89b41" },
@@ -456,34 +879,31 @@ async function fetchEuler(parsed) {
     .map(h => "0x" + h.slice(-40))
     .filter(s => s !== "0x0000000000000000000000000000000000000000");
 
-  // Round 3: per-strategy reads — maxWithdraw, balanceOf(earn), cash, totalBorrows, interestRate
   let strategiesMaxWithdraw = 0n;
   const perStrategy = [];
   if (strategies.length) {
     const calls = [];
     for (const s of strategies) {
-      calls.push({ to: s, data: "0xce96cb77" + padAddr }); // maxWithdraw(earn)
-      calls.push({ to: s, data: "0x70a08231" + padAddr }); // balanceOf(earn)
-      calls.push({ to: s, data: "0x961be391" });           // cash()
-      calls.push({ to: s, data: "0x47bd3718" });           // totalBorrows()
-      calls.push({ to: s, data: "0x7c3a00fd" });           // interestRate()
+      calls.push({ to: s, data: "0xce96cb77" + padAddr });
+      calls.push({ to: s, data: "0x70a08231" + padAddr });
+      calls.push({ to: s, data: "0x961be391" });
+      calls.push({ to: s, data: "0x47bd3718" });
+      calls.push({ to: s, data: "0x7c3a00fd" });
     }
     const res = await rpcBatch(calls);
     for (let i = 0; i < strategies.length; i++) {
-      const base = i * 5;
-      const mw = hexToBigInt(res[base]);
-      const bal = hexToBigInt(res[base + 1]);
-      const cash = hexToBigInt(res[base + 2]);
-      const borrows = hexToBigInt(res[base + 3]);
-      const ir = hexToBigInt(res[base + 4]);
+      const b = i * 5;
+      const mw = hexToBigInt(res[b]);
+      const bal = hexToBigInt(res[b + 1]);
+      const cash = hexToBigInt(res[b + 2]);
+      const borrows = hexToBigInt(res[b + 3]);
+      const ir = hexToBigInt(res[b + 4]);
       strategiesMaxWithdraw += mw;
       perStrategy.push({ address: strategies[i], balanceShares: bal, cash, borrows, interestRate: ir });
     }
   }
   const availableRaw = idleRaw + strategiesMaxWithdraw;
 
-  // Round 4: convertToAssets(balanceShares) per strategy to get each allocation in underlying
-  let totalAllocated = 0n;
   if (perStrategy.length) {
     const calls = perStrategy.map(s => ({
       to: s.address,
@@ -492,16 +912,12 @@ async function fetchEuler(parsed) {
     const res = await rpcBatch(calls);
     for (let i = 0; i < perStrategy.length; i++) {
       perStrategy[i].allocation = hexToBigInt(res[i]);
-      totalAllocated += perStrategy[i].allocation;
     }
   }
 
-  // Compute weighted supply APY across strategies.
-  // Per-strategy supply APY: borrowAPY × utilization × (1 − interestFee); assume fee=10% (1000/1e4, Euler default).
   const SECONDS_PER_YEAR = 31556952;
   const INTEREST_FEE = 0.1;
-  let weightedApyNumerator = 0;
-  let weightedApyDenominator = 0;
+  let num = 0, den = 0;
   for (const s of perStrategy) {
     const stratTotal = s.cash + s.borrows;
     if (stratTotal === 0n || s.allocation === 0n) continue;
@@ -510,18 +926,15 @@ async function fetchEuler(parsed) {
     if (ratePerSec <= 0) continue;
     const borrowAPY = Math.expm1(Math.log1p(ratePerSec) * SECONDS_PER_YEAR);
     const supplyAPY = borrowAPY * util * (1 - INTEREST_FEE);
-    const weight = Number(s.allocation);
-    weightedApyNumerator += supplyAPY * weight;
-    weightedApyDenominator += weight;
+    const w = Number(s.allocation);
+    num += supplyAPY * w; den += w;
   }
-  const chainBaseApy = weightedApyDenominator > 0 ? weightedApyNumerator / weightedApyDenominator : null;
+  const chainBaseApy = den > 0 ? num / den : null;
 
   const totalAssets = Number(totalAssetsRaw) / Math.pow(10, decimals);
   const availableAssets = Number(availableRaw) / Math.pow(10, decimals);
 
-  // DefiLlama for USD TVL (base APY now computed on-chain)
-  let depositsUsd = null, liquidityUsd = null;
-  let baseApy = chainBaseApy;
+  let depositsUsd = null, liquidityUsd = null, baseApy = chainBaseApy;
   try {
     const pools = await fetchLlamaPools();
     const pool = pools.find(p =>
@@ -540,9 +953,7 @@ async function fetchEuler(parsed) {
     }
   } catch (e) {}
 
-  // 4) Merkl for reward APY breakdown
   const rewards = await fetchMerklRewards(parsed.chainId, addr);
-
   const apyTotal = (baseApy || 0) + rewards.apr;
 
   return {
@@ -553,8 +964,6 @@ async function fetchEuler(parsed) {
     curator: "—",
     depositsUsd,
     liquidityUsd,
-    depositsFallback: depositsUsd == null ? { amount: totalAssets, symbol: assetSymbol } : null,
-    liquidityFallback: (liquidityUsd == null && availableAssets > 0) ? { amount: availableAssets, symbol: assetSymbol } : null,
     apyTotal,
     apyBase: baseApy,
     apyIncentives: rewards.apr,
@@ -569,29 +978,25 @@ async function fetchRow(parsed) {
   throw new Error("Unknown protocol");
 }
 
-// ---------- Rendering ----------
-function renderIncentiveDetails(list, total) {
-  if (!list || !list.length) return "";
-  const nonZero = list.filter(r => r.apr > 0);
-  if (!nonZero.length) return "";
-  if (nonZero.length === 1 && Math.abs(nonZero[0].apr - (total || 0)) < 1e-9) {
-    return nonZero[0].symbol;
-  }
-  return nonZero.map(r => `${r.symbol} ${fmtPct(r.apr)}`).join(" + ");
-}
+// ----------------- State -----------------
+const state = {
+  urls: loadUrls(),
+  data: {},
+  sort: { key: "apyTotal", dir: "desc" },
+  tokenFilter: new Set(),
+  search: "",
+  refreshing: false,
+  lastUpdate: null,
+};
 
 const COLUMNS = [
-  { key: "chain", label: "Chain", sortable: true, type: "string", get: r => r.chain },
-  { key: "project", label: "Project", sortable: true, type: "string", get: r => r.project },
   { key: "token", label: "Token", sortable: true, type: "string", get: r => r.token },
   { key: "vault", label: "Vault", sortable: true, type: "string", get: r => r.vaultName },
-  { key: "curator", label: "Curator", sortable: true, type: "string", get: r => r.curator },
-  { key: "deposits", label: "Deposits", sortable: true, type: "number", get: r => r.depositsUsd },
-  { key: "liquidity", label: "Liquidity", sortable: true, type: "number", get: r => r.liquidityUsd },
-  { key: "total", label: "Total APY", sortable: true, type: "number", get: r => r.apyTotal },
-  { key: "base", label: "Base APY", sortable: true, type: "number", get: r => r.apyBase },
-  { key: "incentives", label: "Incentives APY", sortable: true, type: "number", get: r => r.apyIncentives },
-  { key: "url", label: "URL", sortable: false },
+  { key: "project", label: "Protocol", sortable: true, type: "string", get: r => r.project, hide: "hide-sm" },
+  { key: "deposits", label: "Deposits", sortable: true, type: "number", get: r => r.depositsUsd, right: true, hide: "hide-md" },
+  { key: "liquidity", label: "Liquidity", sortable: true, type: "number", get: r => r.liquidityUsd, right: true, hide: "hide-md" },
+  { key: "util", label: "Util", sortable: false, hide: "hide-md" },
+  { key: "apyTotal", label: "APY", sortable: true, type: "number", get: r => r.apyTotal, right: true },
   { key: "actions", label: "", sortable: false },
 ];
 
@@ -604,70 +1009,31 @@ function buildRows() {
       url,
       parsed,
       entry,
-      chain: CHAIN_NAMES[parsed.chainId] || String(parsed.chainId || ""),
-      project: parsed.project,
-      token: d?.token || parsed.asset || "",
-      vaultName: d?.vaultName || "",
-      curator: d?.curator || "",
+      project: d?.project || parsed.project,
+      token: d?.token || parsed.asset || "?",
+      vaultName: d?.vaultName || (parsed.address ? parsed.address.slice(0, 10) + "…" : "Pending…"),
+      curator: d?.curator || "—",
       depositsUsd: d?.depositsUsd ?? null,
       liquidityUsd: d?.liquidityUsd ?? null,
       apyTotal: d?.apyTotal ?? null,
       apyBase: d?.apyBase ?? null,
       apyIncentives: d?.apyIncentives ?? null,
-      incentiveDetails: d?.incentiveDetails || [],
-      depositsFallback: d?.depositsFallback || null,
-      liquidityFallback: d?.liquidityFallback || null,
+      error: entry.error || null,
+      loading: !!entry.loading,
     };
   });
 }
-
-function renderHeader() {
-  const tr = document.getElementById("headerRow");
-  tr.innerHTML = "";
-  COLUMNS.forEach(col => {
-    const th = document.createElement("th");
-    th.textContent = col.label;
-    if (!col.sortable) {
-      th.classList.add("nosort");
-    } else {
-      if (state.sort.key === col.key) {
-        th.classList.add("sorted");
-        const arrow = document.createElement("span");
-        arrow.className = "arrow";
-        arrow.textContent = state.sort.dir === "asc" ? "▲" : "▼";
-        th.appendChild(arrow);
-      }
-      th.addEventListener("click", () => {
-        if (state.sort.key === col.key) {
-          state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
-        } else {
-          state.sort.key = col.key;
-          state.sort.dir = col.type === "number" ? "desc" : "asc";
-        }
-        renderAll();
-      });
-    }
-    tr.appendChild(th);
-  });
+function filterRows(rows) {
+  let out = rows;
+  if (state.tokenFilter.size) out = out.filter(r => state.tokenFilter.has(r.token));
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    out = out.filter(r =>
+      [r.token, r.vaultName, r.project, r.curator].filter(Boolean).some(s => s.toLowerCase().includes(q))
+    );
+  }
+  return out;
 }
-
-function renderFilterChips(rows) {
-  const box = document.getElementById("tokenFilters");
-  const tokens = [...new Set(rows.map(r => r.token).filter(Boolean))].sort();
-  box.innerHTML = "";
-  tokens.forEach(tok => {
-    const chip = document.createElement("span");
-    chip.className = "chip" + (state.tokenFilter.has(tok) ? " active" : "");
-    chip.textContent = tok;
-    chip.addEventListener("click", () => {
-      if (state.tokenFilter.has(tok)) state.tokenFilter.delete(tok);
-      else state.tokenFilter.add(tok);
-      renderAll();
-    });
-    box.appendChild(chip);
-  });
-}
-
 function sortRows(rows) {
   if (!state.sort.key) return rows;
   const col = COLUMNS.find(c => c.key === state.sort.key);
@@ -675,153 +1041,237 @@ function sortRows(rows) {
   const dirMul = state.sort.dir === "asc" ? 1 : -1;
   const arr = rows.slice();
   arr.sort((a, b) => {
-    const va = col.get(a);
-    const vb = col.get(b);
-    // null / undefined go to bottom regardless of direction
-    const aNull = va == null || va === "";
-    const bNull = vb == null || vb === "";
-    if (aNull && bNull) return 0;
-    if (aNull) return 1;
-    if (bNull) return -1;
+    const va = col.get(a), vb = col.get(b);
+    const aN = va == null || va === "";
+    const bN = vb == null || vb === "";
+    if (aN && bN) return 0;
+    if (aN) return 1;
+    if (bN) return -1;
     if (col.type === "number") return (va - vb) * dirMul;
     return String(va).localeCompare(String(vb)) * dirMul;
   });
   return arr;
 }
 
-function renderBody(rows) {
-  const tbody = document.getElementById("tbody");
-  tbody.innerHTML = "";
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    if (r.entry.loading) tr.classList.add("loading");
-    const cells = [];
-    cells.push(`<td>${r.chain || "—"}</td>`);
-    cells.push(`<td><span class="pill">${r.project}</span></td>`);
+// ----------------- Render -----------------
+function renderStats(rows) {
+  const ok = rows.filter(r => r.entry.data);
+  const totalDeposits = ok.reduce((s, r) => s + (r.depositsUsd || 0), 0);
+  const totalLiquidity = ok.reduce((s, r) => s + (r.liquidityUsd || 0), 0);
+  const top = ok.reduce((b, r) => (r.apyTotal != null && (b == null || r.apyTotal > b.apyTotal)) ? r : b, null);
+  const utilWeighted = totalDeposits > 0
+    ? (1 - (totalLiquidity / totalDeposits)) * 100
+    : null;
+  const stats = [
+    { label: "Total Deposits", value: fmtUsd(totalDeposits), meta: `${rows.length} vault${rows.length === 1 ? "" : "s"}` },
+    { label: "Available Liquidity", value: fmtUsd(totalLiquidity), meta: utilWeighted != null ? `${utilWeighted.toFixed(0)}% utilized` : "—" },
+    { label: "Top APY", value: top ? fmtPct(top.apyTotal) : "—", meta: top ? `${top.token} / ${top.project}` : "—" },
+    { label: "Protocols", value: new Set(rows.map(r => r.project)).size, meta: "Morpho · Euler · Neverland" },
+  ];
+  document.getElementById("stats").innerHTML = stats.map(s => `
+    <div class="stat">
+      <div class="stat-label">${escHtml(s.label)}</div>
+      <div class="stat-value">${escHtml(s.value)}</div>
+      <div class="stat-meta">${escHtml(s.meta)}</div>
+    </div>
+  `).join("");
+}
+function renderChips(rows) {
+  const map = new Map();
+  rows.forEach(r => { if (r.token) map.set(r.token, (map.get(r.token) || 0) + 1); });
+  const tokens = [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const host = document.getElementById("chipRow");
+  host.innerHTML = `<span class="muted" style="font-size:12px;margin-right:4px;">Tokens</span>` +
+    tokens.map(([tok, count]) => `
+      <button class="chip ${state.tokenFilter.has(tok) ? "active" : ""}" data-token="${escHtml(tok)}">
+        ${tokenMarkHtml(tok, 16)}
+        ${escHtml(tok)}
+        <span class="chip-count">${count}</span>
+      </button>
+    `).join("") +
+    (state.tokenFilter.size ? `<button class="chip chip-clear" data-clear="1">Clear</button>` : "");
+  host.querySelectorAll(".chip[data-token]").forEach(c => c.addEventListener("click", () => {
+    const t = c.dataset.token;
+    if (state.tokenFilter.has(t)) state.tokenFilter.delete(t); else state.tokenFilter.add(t);
+    renderAll();
+  }));
+  host.querySelectorAll(".chip[data-clear]").forEach(c => c.addEventListener("click", () => {
+    state.tokenFilter.clear(); renderAll();
+  }));
+}
+function renderTable(rows) {
+  const host = document.getElementById("tableHost");
+  if (!rows.length) {
+    host.innerHTML = `<div class="table-card"><div class="empty"><h4>No vaults match your filters</h4><p style="margin:0;font-size:13px;">Try clearing the search or token filters.</p></div></div>`;
+    return;
+  }
+  const headerHtml = COLUMNS.map(col => {
+    const cls = [];
+    if (col.right) cls.push("right");
+    if (col.hide) cls.push(col.hide);
+    if (!col.sortable) cls.push("nosort");
+    if (col.sortable && state.sort.key === col.key) cls.push("sorted");
+    const arrow = (col.sortable && state.sort.key === col.key)
+      ? `<span class="arrow">${state.sort.dir === "asc" ? "▲" : "▼"}</span>` : "";
+    return `<th class="${cls.join(" ")}" data-key="${col.key}" data-sortable="${col.sortable ? "1" : "0"}">${escHtml(col.label)}${arrow}</th>`;
+  }).join("");
 
-    if (r.entry.error) {
-      const label = r.parsed.address ? r.parsed.address.slice(0, 10) + "…" : (r.parsed.asset || "—");
-      cells.push(`<td class="muted">${r.token || "—"}</td>`);
-      cells.push(`<td>${label}</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="err" colspan="3">${r.entry.error}</td>`);
-    } else if (r.entry.data) {
-      cells.push(`<td>${r.token || "—"}</td>`);
-      cells.push(`<td>${r.vaultName || "—"}</td>`);
-      cells.push(`<td>${r.curator || "—"}</td>`);
-      const depCell = r.depositsUsd != null
-        ? fmtUsd(r.depositsUsd)
-        : r.depositsFallback ? `${r.depositsFallback.amount.toLocaleString(undefined,{maximumFractionDigits:2})} ${r.depositsFallback.symbol}` : "—";
-      const liqCell = r.liquidityUsd != null
-        ? fmtUsd(r.liquidityUsd)
-        : r.liquidityFallback ? `${r.liquidityFallback.amount.toLocaleString(undefined,{maximumFractionDigits:2})} ${r.liquidityFallback.symbol}` : "—";
-      cells.push(`<td>${depCell}</td>`);
-      cells.push(`<td>${liqCell}</td>`);
-      cells.push(`<td class="apy-total">${fmtPct(r.apyTotal)}</td>`);
-      cells.push(`<td class="apy-num">${fmtPct(r.apyBase)}</td>`);
-      const incDetails = renderIncentiveDetails(r.incentiveDetails, r.apyIncentives);
-      cells.push(`<td><div class="apy-num">${fmtPct(r.apyIncentives)}</div>${incDetails ? `<div class="apy-parts">${incDetails}</div>` : ""}</td>`);
+  const bodyHtml = rows.map(r => {
+    const cls = [];
+    if (r.loading) cls.push("row-loading");
+    if (r.error) cls.push("row-error");
+    let cells = "";
+    cells += `<td><div class="cell-token">${tokenMarkHtml(r.token, 28)}<span class="cell-token-name">${escHtml(r.token)}</span></div></td>`;
+    cells += `<td><div class="cell-vault"><span class="cell-vault-name">${escHtml(r.vaultName)}</span>${r.curator && r.curator !== "—" ? `<span class="cell-vault-curator">by ${escHtml(r.curator)}</span>` : ""}</div></td>`;
+    cells += `<td class="hide-sm"><div class="cell-project">${projectMarkHtml(r.project, 18)}<span>${escHtml(r.project)}</span></div></td>`;
+    cells += `<td class="cell-num hide-md">${escHtml(fmtUsd(r.depositsUsd))}</td>`;
+    cells += `<td class="cell-num hide-md">${escHtml(fmtUsd(r.liquidityUsd))}</td>`;
+    cells += `<td class="hide-md">${utilBarHtml(r.depositsUsd, r.liquidityUsd)}</td>`;
+    if (r.error) {
+      cells += `<td class="cell-num" colspan="1" style="color:var(--bad);font-size:11px;text-align:right;">${escHtml(r.error)}</td>`;
     } else {
-      cells.push(`<td class="muted">${r.token || "—"}</td>`);
-      cells.push(`<td class="muted">loading…</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="muted">—</td>`);
-      cells.push(`<td class="muted">—</td>`);
+      cells += `<td>${apyDisplayHtml(r.apyTotal, r.apyBase, r.apyIncentives, "md")}</td>`;
     }
+    cells += `<td><div class="cell-action">
+      <a class="row-action" href="${escHtml(r.url)}" target="_blank" rel="noopener" title="Open vault"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg></a>
+      <button class="row-action danger" data-remove="${encodeURIComponent(r.url)}" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+    </div></td>`;
+    return `<tr class="${cls.join(" ")}">${cells}</tr>`;
+  }).join("");
 
-    cells.push(`<td class="url-cell"><a href="${r.url}" target="_blank" rel="noopener">open</a></td>`);
-    cells.push(`<td><button class="danger" data-url="${encodeURIComponent(r.url)}">remove</button></td>`);
-    tr.innerHTML = cells.join("");
-    tbody.appendChild(tr);
-  });
-
-  tbody.querySelectorAll("button.danger").forEach(btn => {
-    btn.addEventListener("click", () => removeUrl(decodeURIComponent(btn.dataset.url)));
-  });
+  host.innerHTML = `<div class="table-card"><table class="vault-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+  host.querySelectorAll("th[data-sortable='1']").forEach(th => th.addEventListener("click", () => {
+    const key = th.dataset.key;
+    const col = COLUMNS.find(c => c.key === key);
+    if (!col) return;
+    if (state.sort.key === key) {
+      state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+    } else {
+      state.sort.key = key;
+      state.sort.dir = col.type === "number" ? "desc" : "asc";
+    }
+    renderAll();
+  }));
+  host.querySelectorAll("button[data-remove]").forEach(btn => btn.addEventListener("click", () => {
+    removeUrl(decodeURIComponent(btn.dataset.remove));
+  }));
 }
-
+function renderStatus(filteredCount, totalCount) {
+  const dot = document.getElementById("statusDot");
+  const text = document.getElementById("statusText");
+  const count = document.getElementById("statusCount");
+  if (state.refreshing) {
+    dot.classList.add("refreshing");
+    text.textContent = "Fetching from Morpho, Euler, Neverland…";
+  } else {
+    dot.classList.remove("refreshing");
+    text.textContent = state.lastUpdate ? `Updated ${state.lastUpdate.toLocaleTimeString()}` : "Ready";
+  }
+  count.textContent = filteredCount === totalCount ? `${totalCount} vault${totalCount === 1 ? "" : "s"}` : `${filteredCount} of ${totalCount} vaults`;
+}
 function renderAll() {
-  const rows = buildRows();
-  renderFilterChips(rows);
-  const filtered = state.tokenFilter.size
-    ? rows.filter(r => state.tokenFilter.has(r.token))
-    : rows;
+  const all = buildRows();
+  const filtered = filterRows(all);
   const sorted = sortRows(filtered);
-  renderHeader();
-  renderBody(sorted);
+  renderStats(filtered);
+  renderChips(all);
+  renderTable(sorted);
+  renderStatus(filtered.length, all.length);
 }
 
-// Back-compat wrapper so the rest of the app can keep calling render()
-function render() { renderAll(); }
-
-let state = {
-  urls: loadUrls(),
-  data: {},
-  sort: { key: null, dir: "asc" },
-  tokenFilter: new Set(),
-};
-
+// ----------------- Mutators / actions -----------------
 async function refreshAll() {
-  const status = document.getElementById("status");
-  status.textContent = "Refreshing…";
+  state.refreshing = true;
   state.data = {};
   state.urls.forEach(u => { state.data[u] = { loading: true }; });
-  render(state.urls, state.data);
-
+  document.getElementById("refreshIcon").classList.add("spin");
+  document.getElementById("refreshLabel").textContent = "Refreshing…";
+  document.getElementById("refreshBtn").disabled = true;
+  renderAll();
   await Promise.all(state.urls.map(async (url) => {
-    const parsed = parseUrl(url);
     try {
-      state.data[url] = { data: await fetchRow(parsed) };
+      state.data[url] = { data: await fetchRow(parseUrl(url)) };
     } catch (e) {
       state.data[url] = { error: e.message || String(e) };
     }
   }));
-  render(state.urls, state.data);
-  status.textContent = "Updated " + new Date().toLocaleTimeString();
+  state.refreshing = false;
+  state.lastUpdate = new Date();
+  document.getElementById("refreshIcon").classList.remove("spin");
+  document.getElementById("refreshLabel").textContent = "Refresh";
+  document.getElementById("refreshBtn").disabled = false;
+  renderAll();
 }
-
 async function refreshOne(url) {
   state.data[url] = { loading: true };
-  render(state.urls, state.data);
+  renderAll();
   try {
     state.data[url] = { data: await fetchRow(parseUrl(url)) };
   } catch (e) {
     state.data[url] = { error: e.message || String(e) };
   }
-  render(state.urls, state.data);
+  renderAll();
 }
-
 function addUrl(url) {
-  url = url.trim();
-  if (!url || state.urls.includes(url)) return;
+  url = (url || "").trim();
+  if (!url) return;
+  if (state.urls.includes(url)) return;
   state.urls.push(url);
   saveUrls(state.urls);
-  render(state.urls, state.data);
+  renderAll();
   refreshOne(url);
 }
 function removeUrl(url) {
   state.urls = state.urls.filter(u => u !== url);
   delete state.data[url];
   saveUrls(state.urls);
-  render(state.urls, state.data);
+  renderAll();
 }
 
-document.getElementById("addBtn").addEventListener("click", () => {
-  const input = document.getElementById("urlInput");
-  addUrl(input.value);
-  input.value = "";
-});
-document.getElementById("urlInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { addUrl(e.target.value); e.target.value = ""; }
-});
+// ----------------- Modal -----------------
+function openAddModal() {
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal" id="modalBox">
+        <h3>Add vault</h3>
+        <p>Paste a Morpho, Euler, or Neverland vault URL. Rates fetch automatically.</p>
+        <input id="modalInput" type="text" placeholder="https://app.morpho.org/monad/vault/0x…" />
+        <div class="modal-actions">
+          <button class="btn" id="modalCancel">Cancel</button>
+          <button class="btn primary" id="modalSubmit">Add vault</button>
+        </div>
+      </div>
+    </div>`;
+  const close = () => { root.innerHTML = ""; };
+  document.getElementById("modalBackdrop").addEventListener("click", close);
+  document.getElementById("modalBox").addEventListener("click", e => e.stopPropagation());
+  document.getElementById("modalCancel").addEventListener("click", close);
+  const submit = () => {
+    const v = document.getElementById("modalInput").value;
+    if (v) addUrl(v);
+    close();
+  };
+  document.getElementById("modalSubmit").addEventListener("click", submit);
+  const input = document.getElementById("modalInput");
+  input.focus();
+  input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); if (e.key === "Escape") close(); });
+}
+
+// ----------------- Wire up -----------------
 document.getElementById("refreshBtn").addEventListener("click", refreshAll);
-document.getElementById("clearFilters").addEventListener("click", () => {
-  state.tokenFilter.clear();
+document.getElementById("addBtn").addEventListener("click", openAddModal);
+document.getElementById("searchInput").addEventListener("input", e => {
+  const v = e.target.value;
+  // If it looks like a vault URL, auto-add and clear the box.
+  if (/^https?:\/\//i.test(v) && /(morpho\.org|euler\.finance|neverland\.money)/i.test(v)) {
+    addUrl(v);
+    e.target.value = "";
+    state.search = "";
+    renderAll();
+    return;
+  }
+  state.search = v;
   renderAll();
 });
 
