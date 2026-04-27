@@ -174,9 +174,12 @@ input { font-family: inherit; }
 .search-box input::placeholder { color: var(--muted); }
 
 .chip-row {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 16px;
+}
+.chip-line {
   display: flex; flex-wrap: wrap; gap: 6px;
   align-items: center;
-  margin-bottom: 16px;
 }
 .chip {
   height: 28px;
@@ -982,6 +985,7 @@ const state = {
   data: {},
   sort: { key: "apyTotal", dir: "desc" },
   tokenFilter: new Set(),
+  projectFilter: new Set(),
   search: "",
   refreshing: false,
   lastUpdate: null,
@@ -1024,6 +1028,7 @@ function buildRows() {
 function filterRows(rows) {
   let out = rows;
   if (state.tokenFilter.size) out = out.filter(r => state.tokenFilter.has(r.token));
+  if (state.projectFilter.size) out = out.filter(r => state.projectFilter.has(r.project));
   if (state.search) {
     const q = state.search.toLowerCase();
     out = out.filter(r =>
@@ -1053,26 +1058,56 @@ function sortRows(rows) {
 
 // ----------------- Render -----------------
 function renderChips(rows) {
-  const map = new Map();
-  rows.forEach(r => { if (r.token) map.set(r.token, (map.get(r.token) || 0) + 1); });
-  const tokens = [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const tokenMap = new Map();
+  const projectMap = new Map();
+  rows.forEach(r => {
+    if (r.token) tokenMap.set(r.token, (tokenMap.get(r.token) || 0) + 1);
+    if (r.project) projectMap.set(r.project, (projectMap.get(r.project) || 0) + 1);
+  });
+  const tokens = [...tokenMap.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const projects = [...projectMap.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
   const host = document.getElementById("chipRow");
-  host.innerHTML = `<span class="muted" style="font-size:12px;margin-right:4px;">Tokens</span>` +
-    tokens.map(([tok, count]) => `
-      <button class="chip ${state.tokenFilter.has(tok) ? "active" : ""}" data-token="${escHtml(tok)}">
-        ${tokenMarkHtml(tok, 16)}
-        ${escHtml(tok)}
-        <span class="chip-count">${count}</span>
-      </button>
-    `).join("") +
-    (state.tokenFilter.size ? `<button class="chip chip-clear" data-clear="1">Clear</button>` : "");
+  const projectChips = projects.map(([p, count]) => `
+    <button class="chip ${state.projectFilter.has(p) ? "active" : ""}" data-project="${escHtml(p)}">
+      ${projectMarkHtml(p, 14)}
+      ${escHtml(p)}
+      <span class="chip-count">${count}</span>
+    </button>
+  `).join("");
+  const tokenChips = tokens.map(([tok, count]) => `
+    <button class="chip ${state.tokenFilter.has(tok) ? "active" : ""}" data-token="${escHtml(tok)}">
+      ${tokenMarkHtml(tok, 16)}
+      ${escHtml(tok)}
+      <span class="chip-count">${count}</span>
+    </button>
+  `).join("");
+  const anyActive = state.tokenFilter.size || state.projectFilter.size;
+  host.innerHTML = `
+    <div class="chip-line">
+      <span class="muted" style="font-size:12px;margin-right:4px;min-width:64px;">Protocols</span>
+      ${projectChips}
+    </div>
+    <div class="chip-line">
+      <span class="muted" style="font-size:12px;margin-right:4px;min-width:64px;">Tokens</span>
+      ${tokenChips}
+      ${anyActive ? `<button class="chip chip-clear" data-clear="1">Clear all</button>` : ""}
+    </div>
+  `;
   host.querySelectorAll(".chip[data-token]").forEach(c => c.addEventListener("click", () => {
     const t = c.dataset.token;
     if (state.tokenFilter.has(t)) state.tokenFilter.delete(t); else state.tokenFilter.add(t);
     renderAll();
   }));
+  host.querySelectorAll(".chip[data-project]").forEach(c => c.addEventListener("click", () => {
+    const p = c.dataset.project;
+    if (state.projectFilter.has(p)) state.projectFilter.delete(p); else state.projectFilter.add(p);
+    renderAll();
+  }));
   host.querySelectorAll(".chip[data-clear]").forEach(c => c.addEventListener("click", () => {
-    state.tokenFilter.clear(); renderAll();
+    state.tokenFilter.clear();
+    state.projectFilter.clear();
+    renderAll();
   }));
 }
 function renderTable(rows) {
@@ -1236,18 +1271,24 @@ function openAddModal() {
 // ----------------- Wire up -----------------
 document.getElementById("refreshBtn").addEventListener("click", refreshAll);
 document.getElementById("addBtn").addEventListener("click", openAddModal);
-document.getElementById("searchInput").addEventListener("input", e => {
-  const v = e.target.value;
-  // If it looks like a vault URL, auto-add and clear the box.
-  if (/^https?:\/\//i.test(v) && /(morpho\.org|euler\.finance|neverland\.money)/i.test(v)) {
-    addUrl(v);
-    e.target.value = "";
-    state.search = "";
-    renderAll();
-    return;
-  }
-  state.search = v;
+function looksLikeVaultUrl(s) {
+  return /^https?:\/\//i.test(s) && /(morpho\.org|euler\.finance|neverland\.money)/i.test(s);
+}
+const searchInput = document.getElementById("searchInput");
+searchInput.addEventListener("input", e => {
+  state.search = e.target.value;
   renderAll();
+});
+searchInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    const v = e.target.value.trim();
+    if (looksLikeVaultUrl(v)) {
+      addUrl(v);
+      e.target.value = "";
+      state.search = "";
+      renderAll();
+    }
+  }
 });
 
 renderAll();
